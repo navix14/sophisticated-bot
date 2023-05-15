@@ -1,8 +1,17 @@
-const { Client, Events, GatewayIntentBits } = require("discord.js");
+const {
+  Client,
+  Events,
+  GatewayIntentBits,
+  ChannelType,
+} = require("discord.js");
 const { token } = require("./config.json");
 const { registerCommands } = require("./registerCommands");
 const Users = require("./db/userModel");
 const buildQueueEmbed = require("./embeds/queueEmbed");
+
+let queueMessage = null;
+let queue = [];
+let nextGameId = 1;
 
 const client = new Client({
   intents: [
@@ -14,31 +23,81 @@ const client = new Client({
 
 registerCommands(client);
 
-function postQueue(channel) {
-  const { queueEmbed, actions } = buildQueueEmbed();
+async function postQueue(channel) {
+  await channel.bulkDelete(100);
 
-  channel.send({ embeds: [queueEmbed] });
+  const { queueEmbed, actions } = buildQueueEmbed(queue.length);
 
-  channel.send({
+  queueMessage = await channel.send({ embeds: [queueEmbed] });
+
+  await channel.send({
     components: [actions],
   });
 }
 
-client.once(Events.ClientReady, async (c) => {
-  Users.sync();
+async function handleQueueConfirm(interaction) {
+  if (queue.includes(interaction.member)) {
+    return interaction.reply({
+      content: "You are in the queue already.",
+      ephemeral: true,
+    });
+  }
 
-  console.log(`Ready! Logged in as ${c.user.tag}`);
-  console.log("Synced database 'sophisticated.db'");
+  queue.push(interaction.member);
+  const { queueEmbed } = buildQueueEmbed(queue.length);
 
-  const channel = await c.channels.fetch("1107365471436689448");
-  await channel.bulkDelete(100);
+  // Put member into queue
+  await queueMessage.edit({
+    embeds: [queueEmbed],
+  });
 
-  // postQueue(channel);
-});
+  const response = await interaction.reply({
+    content: "You joined the queue!",
+    ephemeral: true,
+  });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  // Create game channel
+  if (queue.length === 6) {
+    await interaction.guild.channels.create({
+      name: `game-${nextGameId}`,
+      type: ChannelType.GuildText,
+      parent: "1107704721814335579",
+    });
 
+    nextGameId++;
+
+    queue = [];
+
+    postQueue(interaction.channel);
+  }
+
+  return response;
+}
+
+async function handleQueueCancel(interaction) {
+  if (!queue.includes(interaction.member)) {
+    return interaction.reply({
+      content: "You're not in the queue.",
+      ephemeral: true,
+    });
+  }
+
+  queue = queue.filter((member) => member !== interaction.member);
+  const { queueEmbed } = buildQueueEmbed(queue.length);
+
+  await queueMessage.edit({
+    embeds: [queueEmbed],
+  });
+
+  const response = await interaction.reply({
+    content: "You left the queue.",
+    ephemeral: true,
+  });
+
+  return response;
+}
+
+async function handleCommands(interaction) {
   const command = interaction.client.commands.get(interaction.commandName);
 
   if (!command) {
@@ -50,6 +109,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await command.execute(interaction);
   } catch (error) {
     console.error(error);
+  }
+}
+
+client.once(Events.ClientReady, async (c) => {
+  Users.sync();
+
+  console.log(`Ready! Logged in as ${c.user.tag}`);
+  console.log("Synced database 'sophisticated.db'");
+
+  const queueChannel = await c.channels.fetch("1107365471436689448");
+
+  await postQueue(queueChannel);
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    if (interaction.customId === "confirm") {
+      return handleQueueConfirm(interaction);
+    }
+
+    if (interaction.customId === "cancel") {
+      return handleQueueCancel(interaction);
+    }
+  }
+
+  if (interaction.isChatInputCommand()) {
+    handleCommands(interaction);
   }
 });
 

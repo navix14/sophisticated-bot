@@ -5,7 +5,7 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 
-function buildQueueEmbed() {
+function buildQueueEmbed(numPlayers) {
   const mapDescription = `V3, CPD, 30 minutes
     
     **Map pool**
@@ -19,7 +19,7 @@ function buildQueueEmbed() {
     <:highway:1107382410582179945> Highway
     <:st2:1107384857035812954> Station-2
     
-    **Players in queue: 0/6**
+    **Players in queue: ${numPlayers}/6**
         `;
 
   const queueEmbed = new EmbedBuilder()
