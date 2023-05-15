@@ -7,94 +7,78 @@ const {
 const { token } = require("./config.json");
 const { registerCommands } = require("./registerCommands");
 const Users = require("./db/userModel");
-const buildQueueEmbed = require("./embeds/queueEmbed");
+const Queue = require("./queue/queue");
 
-let queueMessage = null;
-let queue = [];
+let queue = null;
 let nextGameId = 1;
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMembers,
-  ],
-});
+const channels = {};
 
-registerCommands(client);
+async function fetchChannels(c) {
+  // Get channel list
+  const queueChannel = c.channels.cache.find(
+    (channel) => channel.name === "queue-v3"
+  );
 
-async function postQueue(channel) {
-  await channel.bulkDelete(100);
+  const gamesCategoryChannel = c.channels.cache.find(
+    (channel) => channel.name === "games"
+  );
 
-  const { queueEmbed, actions } = buildQueueEmbed(queue.length);
-
-  queueMessage = await channel.send({ embeds: [queueEmbed] });
-
-  await channel.send({
-    components: [actions],
-  });
+  channels["queue-v3"] = queueChannel;
+  channels["games"] = gamesCategoryChannel;
 }
 
 async function handleQueueConfirm(interaction) {
-  if (queue.includes(interaction.member)) {
+  if (queue.contains(interaction.member)) {
     return interaction.reply({
       content: "You are in the queue already.",
       ephemeral: true,
     });
   }
 
-  queue.push(interaction.member);
-  const { queueEmbed } = buildQueueEmbed(queue.length);
+  queue.add(interaction.member);
 
-  // Put member into queue
-  await queueMessage.edit({
-    embeds: [queueEmbed],
+  await queue.embedMessage.edit({
+    embeds: [queue.createEmbed()],
   });
 
-  const response = await interaction.reply({
+  await interaction.reply({
     content: "You joined the queue!",
     ephemeral: true,
   });
 
-  // Create game channel
-  if (queue.length === 6) {
+  if (queue.isFull()) {
     await interaction.guild.channels.create({
       name: `game-${nextGameId}`,
       type: ChannelType.GuildText,
-      parent: "1107704721814335579",
+      parent: channels["games"],
     });
 
-    nextGameId++;
+    nextGameId += 1;
 
-    queue = [];
-
-    postQueue(interaction.channel);
+    queue.reset();
+    await queue.postEmbed();
   }
-
-  return response;
 }
 
 async function handleQueueCancel(interaction) {
-  if (!queue.includes(interaction.member)) {
+  if (!queue.contains(interaction.member)) {
     return interaction.reply({
       content: "You're not in the queue.",
       ephemeral: true,
     });
   }
 
-  queue = queue.filter((member) => member !== interaction.member);
-  const { queueEmbed } = buildQueueEmbed(queue.length);
+  queue.remove(interaction.member);
 
-  await queueMessage.edit({
-    embeds: [queueEmbed],
+  await queue.embedMessage.edit({
+    embeds: [queue.createEmbed()],
   });
 
-  const response = await interaction.reply({
+  return interaction.reply({
     content: "You left the queue.",
     ephemeral: true,
   });
-
-  return response;
 }
 
 async function handleCommands(interaction) {
@@ -112,15 +96,27 @@ async function handleCommands(interaction) {
   }
 }
 
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+  ],
+});
+
+registerCommands(client);
+
 client.once(Events.ClientReady, async (c) => {
   Users.sync();
 
   console.log(`Ready! Logged in as ${c.user.tag}`);
   console.log("Synced database 'sophisticated.db'");
 
-  const queueChannel = await c.channels.fetch("1107365471436689448");
+  fetchChannels(c);
 
-  await postQueue(queueChannel);
+  queue = new Queue(channels["queue-v3"], 6);
+
+  await queue.postEmbed();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
