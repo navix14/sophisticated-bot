@@ -22,8 +22,6 @@ class XeroClient {
         imageUrl = "https://xero.gg" + imageUrl;
       }
 
-      console.log(imageUrl);
-
       return new XeroPlayer(playerName, level, clan, imageUrl);
     } catch (err) {
       const body = err.response.data;

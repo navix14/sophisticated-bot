@@ -23,7 +23,7 @@ module.exports = {
     const xeroName = interaction.options.getString("name");
 
     const member = await interaction.guild.members.fetch(discordUser.id);
-    const discordName = `${member.user.username}#${member.user.discriminator}`;
+    const discordName = `${discordUser.username}#${discordUser.discriminator}`;
 
     try {
       await Users.create({

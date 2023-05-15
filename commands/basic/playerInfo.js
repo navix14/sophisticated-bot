@@ -18,12 +18,17 @@ module.exports = {
     const playerName = interaction.options.getString("name");
     const player = await xeroClient.fetchPlayer(playerName);
 
+    let clanString = `[${player.clan}](https://xero.gg/clan/${player.clan})`;
+    if (!player.clan) {
+      clanString = "Player is not in a clan";
+    }
+
     return interaction.reply({
       embeds: [
         buildInfoEmbed(
           "Player Info",
           `**Player name:** [${player.name}](https://xero.gg/player/${playerName})
-**Clan:** [${player.clan}](https://xero.gg/clan/${player.clan})
+**Clan:** ${clanString}
 **Level:** ${player.level}`,
           player.imageUrl
         ),
