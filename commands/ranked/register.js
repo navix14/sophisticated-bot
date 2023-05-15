@@ -1,6 +1,9 @@
 const { SlashCommandBuilder } = require("discord.js");
-const Users = require("../../db/queue-api");
+const Users = require("../../db/userModel");
 const buildErrorEmbed = require("../../embeds/errorEmbed");
+const XeroClient = require("../../xero-api/xeroClient");
+
+const xeroClient = new XeroClient();
 
 async function linkAccount(interaction, discordName, xeroName) {
   await interaction.member.setNickname(xeroName);
@@ -34,6 +37,18 @@ module.exports = {
   async execute(interaction) {
     const xeroName = interaction.options.getString("name");
     const discordName = `${interaction.user.username}#${interaction.user.discriminator}`;
+
+    // Check if Xero account exists
+    if (!(await xeroClient.playerExists(xeroName))) {
+      return interaction.reply({
+        embeds: [
+          buildErrorEmbed(
+            "Failed to link",
+            `Player **${xeroName}** does not exist on xero.gg`
+          ),
+        ],
+      });
+    }
 
     const user = await Users.findOne({ where: { discord_name: discordName } });
     const userForXeroName = await Users.findOne({
