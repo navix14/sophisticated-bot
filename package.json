@@ -12,5 +12,8 @@
     "discord.js": "^14.11.0",
     "sequelize": "^6.31.1",
     "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "eslint": "^8.40.0"
   }
 }

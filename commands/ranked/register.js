@@ -1,11 +1,22 @@
 const { SlashCommandBuilder } = require("discord.js");
 const Users = require("../../db/queue-api");
+const buildErrorEmbed = require("../../embeds/errorEmbed");
 
 async function linkAccount(interaction, discordName, xeroName) {
   await interaction.member.setNickname(xeroName);
   return interaction.reply(
     `${interaction.user} has been linked to '${xeroName}'`
   );
+}
+
+function buildCooldownEmbed(xeroName, nextLinkDate) {
+  const embed = buildErrorEmbed(
+    "Re-Link Cooldown",
+    `You are already linked to **${xeroName}**.
+  Your next re-link is possible at **${nextLinkDate.toLocaleString()}**`
+  );
+
+  return embed;
 }
 
 module.exports = {
@@ -30,9 +41,14 @@ module.exports = {
     });
 
     if (userForXeroName && userForXeroName.discord_name !== discordName) {
-      return interaction.reply(
-        `Another member is already linked to ${xeroName}`
-      );
+      return interaction.reply({
+        embeds: [
+          buildErrorEmbed(
+            "Failed to link",
+            `**${userForXeroName.discord_name}** is already linked to **${xeroName}**`
+          ),
+        ],
+      });
     }
 
     // If user is already registered, check if re-link is allowed
@@ -43,9 +59,6 @@ module.exports = {
 
       const currentDate = new Date();
 
-      console.log(currentDate);
-      console.log(nextLinkDate);
-
       // Re-link is possible again
       if (currentDate > nextLinkDate) {
         await Users.update(
@@ -55,9 +68,9 @@ module.exports = {
 
         linkAccount(interaction, discordName, xeroName);
       } else {
-        return interaction.reply(
-          `You are already linked to an ingame account. Your next re-link is possible at \`${nextLinkDate.toLocaleString()}\``
-        );
+        return interaction.reply({
+          embeds: [buildCooldownEmbed(user.ingame_name, nextLinkDate)],
+        });
       }
     } else {
       // First link is always possible
