@@ -36,11 +36,7 @@ async function handleQueueConfirm(interaction) {
     });
   }
 
-  queue.add(interaction.member);
-
-  await queue.embedMessage.edit({
-    embeds: [queue.createEmbed()],
-  });
+  await queue.add(interaction.member);
 
   await interaction.reply({
     content: "You joined the queue!",
@@ -70,10 +66,6 @@ async function handleQueueCancel(interaction) {
   }
 
   queue.remove(interaction.member);
-
-  await queue.embedMessage.edit({
-    embeds: [queue.createEmbed()],
-  });
 
   return interaction.reply({
     content: "You left the queue.",

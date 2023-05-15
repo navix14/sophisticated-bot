@@ -2,6 +2,8 @@ const { SlashCommandBuilder } = require("discord.js");
 const XeroClient = require("../../xero-api/xeroClient");
 const buildInfoEmbed = require("../../embeds/infoEmbed");
 
+const xeroClient = new XeroClient();
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("player_info")
@@ -13,7 +15,6 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
-    const xeroClient = new XeroClient();
     const playerName = interaction.options.getString("name");
     const player = await xeroClient.fetchPlayer(playerName);
 

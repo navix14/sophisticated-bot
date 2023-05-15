@@ -20,14 +20,22 @@ class Queue {
     return this.queue.length === this.limit;
   }
 
-  add(member) {
+  async add(member) {
     if (this.queue.length < this.limit) {
       this.queue.push(member);
+
+      await this.embedMessage.edit({
+        embeds: [this.createEmbed()],
+      });
     }
   }
 
-  remove(member) {
+  async remove(member) {
     this.queue = this.queue.filter((m) => m !== member);
+
+    await this.embedMessage.edit({
+      embeds: [this.createEmbed()],
+    });
   }
 
   setEmbedMessage(embedMessage) {

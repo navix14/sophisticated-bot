@@ -1,25 +1,15 @@
-const { SlashCommandBuilder } = require("discord.js");
 const Users = require("../../db/userModel");
-const buildErrorEmbed = require("../../embeds/errorEmbed");
 const XeroClient = require("../../xero-api/xeroClient");
+const { SlashCommandBuilder } = require("discord.js");
+const { buildErrorEmbed, buildCooldownEmbed } = require("../../embeds");
 
 const xeroClient = new XeroClient();
 
-async function linkAccount(interaction, discordName, xeroName) {
+async function renameUser(interaction, xeroName) {
   await interaction.member.setNickname(xeroName);
   return interaction.reply(
     `${interaction.user} has been linked to '${xeroName}'`
   );
-}
-
-function buildCooldownEmbed(xeroName, nextLinkDate) {
-  const embed = buildErrorEmbed(
-    "Re-Link Cooldown",
-    `You are already linked to **${xeroName}**.
-  Your next re-link is possible at **${nextLinkDate.toLocaleString()}**`
-  );
-
-  return embed;
 }
 
 module.exports = {
@@ -50,21 +40,22 @@ module.exports = {
       });
     }
 
-    const user = await Users.findOne({ where: { discord_name: discordName } });
-    const userForXeroName = await Users.findOne({
+    const existingUser = await Users.findOne({
       where: { ingame_name: xeroName },
     });
 
-    if (userForXeroName && userForXeroName.discord_name !== discordName) {
+    if (existingUser && existingUser.discord_name !== discordName) {
       return interaction.reply({
         embeds: [
           buildErrorEmbed(
             "Failed to link",
-            `**${userForXeroName.discord_name}** is already linked to **${xeroName}**`
+            `**${existingUser.discord_name}** is already linked to **${xeroName}**`
           ),
         ],
       });
     }
+
+    const user = await Users.findOne({ where: { discord_name: discordName } });
 
     // If user is already registered, check if re-link is allowed
     if (user) {
@@ -81,7 +72,7 @@ module.exports = {
           { where: { discord_name: discordName } }
         );
 
-        linkAccount(interaction, discordName, xeroName);
+        renameUser(interaction, xeroName);
       } else {
         return interaction.reply({
           embeds: [buildCooldownEmbed(user.ingame_name, nextLinkDate)],
@@ -95,7 +86,7 @@ module.exports = {
         last_link: new Date(),
       });
 
-      linkAccount(interaction, discordName, xeroName);
+      renameUser(interaction, xeroName);
     }
   },
 };
