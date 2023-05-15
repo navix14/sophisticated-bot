@@ -1,36 +1,73 @@
 const { SlashCommandBuilder } = require("discord.js");
 const Users = require("../../db/queue-api");
 
+async function linkAccount(interaction, discordName, xeroName) {
+  await interaction.member.setNickname(xeroName);
+  return interaction.reply(
+    `${interaction.user} has been linked to '${xeroName}'`
+  );
+}
+
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName("register")
-        .setDescription("Register your Discord account with your ingame Xero account")
-        .addStringOption(option =>
-            option.setName("name")
-                .setDescription("Your ingame Xero name")
-                .setRequired(true)),
-    async execute(interaction) {
-        const username = interaction.options.getString("name");
-        const discordName = `${interaction.user.username}#${interaction.user.discriminator}`;
+  data: new SlashCommandBuilder()
+    .setName("register")
+    .setDescription(
+      "Register your Discord account with your ingame Xero account"
+    )
+    .addStringOption((option) =>
+      option
+        .setName("name")
+        .setDescription("Your ingame Xero name")
+        .setRequired(true)
+    ),
+  async execute(interaction) {
+    const xeroName = interaction.options.getString("name");
+    const discordName = `${interaction.user.username}#${interaction.user.discriminator}`;
 
-        // Save into database
-        try {
-            await Users.create({
-                discord_name: discordName,
-                ingame_name: username
-            });
-        } catch (error) {            
-            if (error.name === "SequelizeUniqueConstraintError") {
-                const user = await Users.findOne({ where: { discord_name: discordName}});
-                return interaction.reply(`${interaction.user} is already linked to '${user.ingame_name}'`);
-            }
-        }
-        
-        // Rename user
-        await interaction.member.setNickname(username);
+    const user = await Users.findOne({ where: { discord_name: discordName } });
+    const userForXeroName = await Users.findOne({
+      where: { ingame_name: xeroName },
+    });
 
-        return interaction.reply({
-            content: `${interaction.user} has been linked to '${username}'`
-        });
+    if (userForXeroName && userForXeroName.discord_name !== discordName) {
+      return interaction.reply(
+        `Another member is already linked to ${xeroName}`
+      );
     }
+
+    // If user is already registered, check if re-link is allowed
+    if (user) {
+      const lastLinkDate = user.last_link;
+      const nextLinkDate = new Date(lastLinkDate);
+      nextLinkDate.setDate(lastLinkDate.getDate() + 2);
+
+      const currentDate = new Date();
+
+      console.log(currentDate);
+      console.log(nextLinkDate);
+
+      // Re-link is possible again
+      if (currentDate > nextLinkDate) {
+        await Users.update(
+          { ingame_name: xeroName, last_link: currentDate },
+          { where: { discord_name: discordName } }
+        );
+
+        linkAccount(interaction, discordName, xeroName);
+      } else {
+        return interaction.reply(
+          `You are already linked to an ingame account. Your next re-link is possible at \`${nextLinkDate.toLocaleString()}\``
+        );
+      }
+    } else {
+      // First link is always possible
+      await Users.create({
+        discord_name: discordName,
+        ingame_name: xeroName,
+        last_link: new Date(),
+      });
+
+      linkAccount(interaction, discordName, xeroName);
+    }
+  },
 };

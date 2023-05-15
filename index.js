@@ -59,7 +59,7 @@ client.once(Events.ClientReady, async c => {
     const channel = await c.channels.fetch("1107365471436689448");
     await channel.bulkDelete(100);
     
-    postQueue(channel);
+    // postQueue(channel);
 });
 
 client.on(Events.InteractionCreate, async interaction => {    

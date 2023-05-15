@@ -21,6 +21,9 @@ const Users = sequelize.define('users', {
         defaultValue: 100,
         allowNull: false
     },
+    last_link: {
+        type: Sequelize.DATE,
+    }
 });
 
 module.exports = Users;
