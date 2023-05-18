@@ -1,6 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const XeroPlayer = require("./player");
+const XeroPlayer = require("./xeroProfile");
 
 class XeroClient {
   async fetchPlayer(playerName) {

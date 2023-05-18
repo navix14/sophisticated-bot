@@ -21,6 +21,14 @@ const Users = sequelize.define("users", {
     defaultValue: 100,
     allowNull: false,
   },
+  wins: {
+    type: Sequelize.INTEGER,
+    defaultValue: 0,
+  },
+  losses: {
+    type: Sequelize.INTEGER,
+    defaultValue: 0,
+  },
   last_link: {
     type: Sequelize.DATE,
   },

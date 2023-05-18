@@ -1,4 +1,4 @@
-class XeroPlayer {
+class XeroProfile {
   constructor(name, level, clan, imageUrl) {
     this.name = name;
     this.level = level;
@@ -7,4 +7,4 @@ class XeroPlayer {
   }
 }
 
-module.exports = XeroPlayer;
+module.exports = XeroProfile;

@@ -18,9 +18,15 @@ module.exports = {
     const playerName = interaction.options.getString("name");
     const player = await xeroClient.fetchPlayer(playerName);
 
-    let clanString = `[${player.clan}](https://xero.gg/clan/${player.clan})`;
+    if (player === null) {
+      return interaction.reply(`Player ${playerName} does not exist`);
+    }
+
+    let clanString = "";
     if (!player.clan) {
       clanString = "Player is not in a clan";
+    } else {
+      clanString = `[${player.clan}](https://xero.gg/clan/${player.clan})`;
     }
 
     return interaction.reply({

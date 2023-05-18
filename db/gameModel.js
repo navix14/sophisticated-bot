@@ -22,13 +22,13 @@ const Games = sequelize.define("ranked_games", {
     allowNull: false,
   },
   player2: {
-    type: Sequelize.DATE,
+    type: Sequelize.STRING,
   },
   player3: {
-    type: Sequelize.DATE,
+    type: Sequelize.STRING,
   },
   player4: {
-    type: Sequelize.DATE,
+    type: Sequelize.STRING,
   },
   result: {
     type: Sequelize.INTEGER,
@@ -42,7 +42,7 @@ const Games = sequelize.define("ranked_games", {
   screenshot_url: {
     type: Sequelize.STRING,
   },
-  phase: {
+  state: {
     type: Sequelize.STRING,
   },
 });
