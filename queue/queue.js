@@ -2,27 +2,27 @@ const buildQueueEmbed = require("../embeds/queueEmbed");
 
 class Queue {
   constructor(channel, limit) {
-    this.queue = [];
+    this.players = [];
     this.queueChannel = channel;
     this.embedMessage = null;
     this.limit = limit;
   }
 
   contains(member) {
-    return this.queue.includes(member);
+    return this.players.includes(member);
   }
 
   reset() {
-    this.queue = [];
+    this.players = [];
   }
 
   isFull() {
-    return this.queue.length === this.limit;
+    return this.players.length === this.limit;
   }
 
   async add(member) {
-    if (this.queue.length < this.limit) {
-      this.queue.push(member);
+    if (this.players.length < this.limit) {
+      this.players.push(member);
 
       await this.embedMessage.edit({
         embeds: [this.createEmbed()],
@@ -31,7 +31,7 @@ class Queue {
   }
 
   async remove(member) {
-    this.queue = this.queue.filter((m) => m !== member);
+    this.players = this.players.filter((m) => m !== member);
 
     await this.embedMessage.edit({
       embeds: [this.createEmbed()],
@@ -45,7 +45,7 @@ class Queue {
   async postEmbed() {
     await this.queueChannel.bulkDelete(100);
 
-    const { queueEmbed, actions } = buildQueueEmbed(this.queue.length);
+    const { queueEmbed, actions } = buildQueueEmbed(this.players.length);
     const embedMessage = await this.queueChannel.send({ embeds: [queueEmbed] });
 
     this.embedMessage = embedMessage;
@@ -56,7 +56,7 @@ class Queue {
   }
 
   createEmbed() {
-    return buildQueueEmbed(this.queue.length).queueEmbed;
+    return buildQueueEmbed(this.players.length).queueEmbed;
   }
 }
 

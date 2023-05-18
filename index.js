@@ -7,15 +7,17 @@ const {
 const { token } = require("./config.json");
 const { registerCommands } = require("./registerCommands");
 const Users = require("./db/userModel");
+const Games = require("./db/gameModel");
 const Queue = require("./queue/queue");
 const XeroClient = require("./xero-api/xeroClient");
+const RankedGame = require("./game");
 
 const xeroClient = new XeroClient();
 let queue = null;
 let nextGameId = 1;
 
 const channels = {};
-const games = {};
+const activeGames = [];
 
 async function fetchChannels(c) {
   // Get channel list
@@ -36,20 +38,28 @@ async function fetchChannels(c) {
   channels["bot-spam"] = botSpamChannel;
 }
 
-async function setupGameChannel(gameInfo) {
-  const { channel, players } = gameInfo;
+async function setupGame(game) {
+  const { channel, players } = game;
 
   // Shuffle players array
   const playersShuffled = players.sort(() => 0.5 - Math.random());
 
   // Pick captains
-  const captainA = playersShuffled[0];
-  const captainB = playersShuffled[1];
+  game.setCaptainA(playersShuffled[0]);
+  game.setCaptainB(playersShuffled[1]);
 
-  channel.send(`Captains have been chosen!
+  const mentionString = playersShuffled.map((p) => `${p}`).join(" ");
 
-Captain A: **${captainA.user}**
-Captain B: **${captainB.user}**`);
+  await channel.send(`${mentionString}
+Captains have been chosen!
+
+Captain A: **${game.captainA}**
+Captain B: **${game.captainB}**`);
+
+  await channel.send({ embeds: [game.createEmbed()] });
+
+  activeGames.push(game);
+  nextGameId += 1;
 }
 
 function getDiscordNameFromUser(user) {
@@ -89,8 +99,8 @@ async function handleQueueConfirm(interaction) {
   }
 
   // Check if player is already in a game
-  for (const id in games) {
-    const game = games[id];
+  for (const id in activeGames) {
+    const game = activeGames[id];
     if (game.players.includes(interaction.member)) {
       return interaction.reply({
         content: `You are already part of a game, see ${game.channel}`,
@@ -113,18 +123,16 @@ async function handleQueueConfirm(interaction) {
       parent: channels["games"],
     });
 
-    games[nextGameId] = {
+    const game = new RankedGame({
+      gameId: nextGameId,
       channel: gameChannel,
-      players: queue.queue,
-      state: "pick-a",
-    };
+      players: queue.players,
+    });
 
-    setupGameChannel(games[nextGameId]);
-
-    nextGameId += 1;
+    setupGame(game);
 
     queue.reset();
-    await queue.postEmbed();
+    setTimeout(() => queue.postEmbed(), 1500);
   }
 }
 
@@ -152,6 +160,8 @@ async function handleCommands(interaction) {
     return;
   }
 
+  interaction.activeGames = activeGames;
+
   try {
     await command.execute(interaction);
   } catch (error) {
@@ -171,13 +181,14 @@ registerCommands(client);
 
 client.once(Events.ClientReady, async (c) => {
   Users.sync();
+  Games.sync();
 
   console.log(`Ready! Logged in as ${c.user.tag}`);
   console.log("Synced database 'sophisticated.db'");
 
   fetchChannels(c);
 
-  queue = new Queue(channels["queue-v3"], 2);
+  queue = new Queue(channels["queue-v3"], 6);
 
   await queue.postEmbed();
 });
@@ -191,6 +202,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.customId === "cancel") {
       return handleQueueCancel(interaction);
     }
+  }
+
+  if (interaction.isModalSubmit()) {
+    return interaction.reply({
+      content: "Successfully edited player stats!",
+      ephemeral: true,
+    });
   }
 
   if (interaction.isChatInputCommand()) {
