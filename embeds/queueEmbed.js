@@ -5,21 +5,17 @@ const {
   ActionRowBuilder,
 } = require("discord.js");
 
-function buildQueueEmbed(numPlayers) {
-  const mapDescription = `V3, CPD, 30 minutes
+function buildQueueEmbed(queueName, numPlayers, playerLimit, mapPool) {
+  const mapPoolString = mapPool
+    .map((m) => `${m.mapIcon} ${m.mapName}`)
+    .join("\n");
+
+  const mapDescription = `V${playerLimit / 2}, CPD, 30 minutes
     
-    **Map pool**
-    <:jungle:1107382777059483699> Jungle
-    <:ziggurat:1107382418899468460> Ziggurat
-    <:templem:1107380807892471928> Temple-M
-    <:colosseum:1107382408585678868> Colosseum
-    <:neden3:1107382411785928789> Neden-3
-    <:tunnel:1107382417330802710> Tunnel
-    <:oldschool:1107382413769834546> Old-School
-    <:highway:1107382410582179945> Highway
-    <:st2:1107384857035812954> Station-2
-    
-    **Players in queue: ${numPlayers}/6**
+**Map pool**
+${mapPoolString}
+
+**Players in queue: ${numPlayers}/${playerLimit}**
         `;
 
   const queueEmbed = new EmbedBuilder()
@@ -29,12 +25,12 @@ function buildQueueEmbed(numPlayers) {
     .setDescription(mapDescription);
 
   const confirm = new ButtonBuilder()
-    .setCustomId("confirm")
+    .setCustomId(`join-${queueName}`)
     .setLabel("Join queue")
     .setStyle(ButtonStyle.Success);
 
   const cancel = new ButtonBuilder()
-    .setCustomId("cancel")
+    .setCustomId(`leave-${queueName}`)
     .setLabel("Leave queue")
     .setStyle(ButtonStyle.Danger);
 

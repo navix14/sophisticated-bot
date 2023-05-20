@@ -7,12 +7,8 @@ const {
 
 function buildPlayerEditModal(player) {
   const modal = new ModalBuilder()
-    .setCustomId("player-edit-modal")
-    .setTitle(`Edit stats of '${player.ingame_name}'`);
-
-  console.log(player.points);
-  console.log(player.wins);
-  console.log(player.losses);
+    .setCustomId(`player-edit-modal[${player.ingameName}]`)
+    .setTitle(`Edit stats of '${player.ingameName}'`);
 
   const pointsInput = new TextInputBuilder()
     .setCustomId("pointsInput")

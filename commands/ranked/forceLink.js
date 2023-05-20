@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const Users = require("../../db/userModel");
+const UserModel = require("../../db/userModel");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,29 +21,34 @@ module.exports = {
   async execute(interaction) {
     const discordUser = interaction.options.getUser("discord_name");
     const xeroName = interaction.options.getString("name");
-
     const member = await interaction.guild.members.fetch(discordUser.id);
-    const discordName = `${discordUser.username}#${discordUser.discriminator}`;
 
     try {
-      await Users.create({
-        discord_name: discordName,
-        ingame_name: xeroName,
-        last_link: new Date(),
+      await UserModel.create({
+        discordName: discordUser.tag,
+        ingameName: xeroName,
+        lastLink: new Date(),
       });
     } catch (error) {
       if (error.name === "SequelizeUniqueConstraintError") {
-        await Users.update(
-          { ingame_name: xeroName, last_link: new Date() },
-          { where: { discord_name: discordName } }
+        await UserModel.update(
+          { ingameName: xeroName, lastLink: new Date() },
+          { where: { discordName: discordUser.tag } }
         );
       }
     }
 
-    await member.setNickname(xeroName);
+    const user = await UserModel.findOne({ where: { ingameName: xeroName } });
+    const points = user ? user.points : "100";
+
+    try {
+      await member.setNickname(`${xeroName} [${points}]`);
+    } catch (err) {
+      console.log(err);
+    }
 
     await interaction.reply({
-      content: `${discordUser} force-linked to '${xeroName}'`,
+      content: `${member} force-linked to '${xeroName}'`,
     });
   },
 };

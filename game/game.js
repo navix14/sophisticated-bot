@@ -1,4 +1,5 @@
-const buildInfoEmbed = require("./embeds/infoEmbed");
+const buildInfoEmbed = require("../embeds/infoEmbed");
+const { mapPool } = require("../config.json");
 
 class RankedGame {
   constructor(gameInfo) {
@@ -7,24 +8,65 @@ class RankedGame {
     this.players = gameInfo.players;
     this.teamA = [];
     this.teamB = [];
+    this.mapPool = [...mapPool];
+    this.bannedMaps = [];
+    this.map = "";
+
+    this.hasVoted = [];
+    this.votesA = 0;
+    this.votesB = 0;
+    this.result = "";
+
     this.state = "pick-a";
   }
 
+  banMap(mapName) {
+    if (this.bannedMaps.includes(mapName)) {
+      return false;
+    }
+
+    const index = this.mapPool.findIndex((map) => map.mapName === mapName);
+    this.mapPool.splice(index, 1);
+    this.bannedMaps.push(mapName);
+
+    return true;
+  }
+
+  playerHasVoted(player) {
+    return this.hasVoted.includes(player);
+  }
+
+  getTeamlessPlayers() {
+    return this.players.filter(
+      (p) => !this.teamA.includes(p) && !this.teamB.includes(p)
+    );
+  }
+
+  setResult(winner) {
+    this.result = winner;
+  }
+
+  makeVote(player, team) {
+    if (team === "a") {
+      this.votesA++;
+    } else {
+      this.votesB++;
+    }
+
+    this.hasVoted.push(player);
+  }
+
   setCaptainA(player) {
-    player.team = "A";
     this.teamA.push(player);
     this.captainA = player;
   }
 
   setCaptainB(player) {
-    player.team = "B";
     this.teamB.push(player);
     this.captainB = player;
   }
 
   assignPlayerToTeam(player, team) {
-    player.team = team;
-
     if (team === "A") {
       this.teamA.push(player);
     } else {
@@ -54,7 +96,7 @@ class RankedGame {
     switch (this.state) {
       case "pick-a":
         return buildInfoEmbed(
-          `Game ${this.gameId} (V3 Queue)`,
+          `Game ${this.gameId} (V${this.players.length / 2} Queue)`,
           `Start picking!
 
 **Team A:**
@@ -74,16 +116,15 @@ ${this.captainA} Use the \`/pick\` command to pick 1 player!
         );
       case "pick-b":
         return buildInfoEmbed(
-          `Game ${this.gameId} (V3 Queue)`,
+          `Game ${this.gameId} (V${this.players.length / 2} Queue)`,
           `Start picking!
       
-**Team 1:**
+**Team A:**
 Captain: ${this.captainA}
 ${playersA}
 
-**Team 2:**
+**Team B:**
 Captain: ${this.captainB}
-${playersB}
 
 **Remaining players:**
 ${remainingPlayersString}

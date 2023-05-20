@@ -3,43 +3,35 @@ const {
   Events,
   GatewayIntentBits,
   ChannelType,
+  ActionRowBuilder,
 } = require("discord.js");
-const { token } = require("./config.json");
+const { token, mapPool, gameCategory, queues } = require("./config.json");
 const { registerCommands } = require("./registerCommands");
-const Users = require("./db/userModel");
-const Games = require("./db/gameModel");
-const Queue = require("./queue/queue");
+const { UserModel, GameModel, ParticipantModel } = require("./db");
+const { extractString } = require("./utils");
+const { buildInfoEmbed, buildMapBanEmbed } = require("./embeds");
+const { buildMapBanMenu } = require("./menus");
+const { Queue, RankedGame, QueueManager, GameManager } = require("./game");
+const ChannelManager = require("./channelManager");
 const XeroClient = require("./xero-api/xeroClient");
-const RankedGame = require("./game");
+const { Sequelize } = require("sequelize");
 
 const xeroClient = new XeroClient();
-let queue = null;
-let nextGameId = 1;
 
-const channels = {};
-const activeGames = [];
+async function createGame(interaction, players) {
+  const gameId = GameManager.nextGameId;
 
-async function fetchChannels(c) {
-  // Get channel list
-  const queueChannel = c.channels.cache.find(
-    (channel) => channel.name === "queue-v3"
-  );
+  const gameChannel = await interaction.guild.channels.create({
+    name: `game-${gameId}`,
+    type: ChannelType.GuildText,
+    parent: ChannelManager.findByName(gameCategory),
+  });
 
-  const gamesCategoryChannel = c.channels.cache.find(
-    (channel) => channel.name === "games"
-  );
-
-  const botSpamChannel = c.channels.cache.find(
-    (channel) => channel.name === "bot-spam"
-  );
-
-  channels["queue-v3"] = queueChannel;
-  channels["games"] = gamesCategoryChannel;
-  channels["bot-spam"] = botSpamChannel;
-}
-
-async function setupGame(game) {
-  const { channel, players } = game;
+  const game = new RankedGame({
+    gameId: gameId,
+    channel: gameChannel,
+    players: players,
+  });
 
   // Shuffle players array
   const playersShuffled = players.sort(() => 0.5 - Math.random());
@@ -48,39 +40,38 @@ async function setupGame(game) {
   game.setCaptainA(playersShuffled[0]);
   game.setCaptainB(playersShuffled[1]);
 
-  const mentionString = playersShuffled.map((p) => `${p}`).join(" ");
+  GameManager.addGame(game);
 
-  await channel.send(`${mentionString}
+  const mentionString = playersShuffled.join(" ");
+
+  await gameChannel.send(`${mentionString}
 Captains have been chosen!
 
 Captain A: **${game.captainA}**
 Captain B: **${game.captainB}**`);
 
-  await channel.send({ embeds: [game.createEmbed()] });
-
-  activeGames.push(game);
-  nextGameId += 1;
+  await gameChannel.send({ embeds: [game.createEmbed()] });
 }
 
-function getDiscordNameFromUser(user) {
-  return `${user.username}#${user.discriminator}`;
-}
+async function handleQueueConfirm(interaction, queue) {
+  const member = interaction.member;
 
-async function handleQueueConfirm(interaction) {
-  // Check if member is already in queue
-  if (queue.contains(interaction.member)) {
+  // Check if member is already in any queue
+  if (QueueManager.isMemberInQueue(member)) {
+    const existingQueue = QueueManager.findQueueByPlayer(member);
+
     return interaction.reply({
-      content: "You are in the queue already.",
+      content: `You are in a queue already. (${existingQueue.channel})`,
       ephemeral: true,
     });
   }
 
-  const user = await Users.findOne({
-    where: { discord_name: getDiscordNameFromUser(interaction.user) },
+  const user = await UserModel.findOne({
+    where: { discordName: member.user.tag },
   });
 
   // Check if user is linked
-  if (user === null) {
+  if (!user) {
     return interaction.reply({
       content:
         "You have to link your Xero account first. Use the `/register` command",
@@ -88,7 +79,14 @@ async function handleQueueConfirm(interaction) {
     });
   }
 
-  const player = await xeroClient.fetchPlayer(user.ingame_name);
+  if (user.bannedUntil && new Date() < user.bannedUntil) {
+    return interaction.reply({
+      content: `You are banned from matchmaking until ${user.bannedUntil.toLocaleString()}`,
+      ephemeral: true,
+    });
+  }
+
+  const player = await xeroClient.fetchPlayer(user.ingameName);
 
   // Check if player is at least semi level
   if (player.level < 21) {
@@ -99,14 +97,13 @@ async function handleQueueConfirm(interaction) {
   }
 
   // Check if player is already in a game
-  for (const id in activeGames) {
-    const game = activeGames[id];
-    if (game.players.includes(interaction.member)) {
-      return interaction.reply({
-        content: `You are already part of a game, see ${game.channel}`,
-        ephemeral: true,
-      });
-    }
+  if (GameManager.isPlayerInGame(member)) {
+    const existingGame = GameManager.findGameByPlayer(member);
+
+    return interaction.reply({
+      content: `You are already part of a game, see ${existingGame.channel}`,
+      ephemeral: true,
+    });
   }
 
   await queue.add(interaction.member);
@@ -117,26 +114,14 @@ async function handleQueueConfirm(interaction) {
   });
 
   if (queue.isFull()) {
-    const gameChannel = await interaction.guild.channels.create({
-      name: `game-${nextGameId}`,
-      type: ChannelType.GuildText,
-      parent: channels["games"],
-    });
-
-    const game = new RankedGame({
-      gameId: nextGameId,
-      channel: gameChannel,
-      players: queue.players,
-    });
-
-    setupGame(game);
+    createGame(interaction, queue.players);
 
     queue.reset();
-    setTimeout(() => queue.postEmbed(), 1500);
+    setTimeout(() => queue.postEmbed(), 3000);
   }
 }
 
-async function handleQueueCancel(interaction) {
+async function handleQueueCancel(interaction, queue) {
   if (!queue.contains(interaction.member)) {
     return interaction.reply({
       content: "You're not in the queue.",
@@ -144,10 +129,37 @@ async function handleQueueCancel(interaction) {
     });
   }
 
-  queue.remove(interaction.member);
+  await queue.remove(interaction.member);
 
   return interaction.reply({
     content: "You left the queue.",
+    ephemeral: true,
+  });
+}
+
+async function handleEditPlayerModal(interaction) {
+  const xeroName = extractString(interaction.customId, "[", "]");
+
+  const points = parseInt(interaction.fields.getTextInputValue("pointsInput"));
+  const wins = parseInt(interaction.fields.getTextInputValue("winsInput"));
+  const losses = parseInt(interaction.fields.getTextInputValue("lossesInput"));
+
+  const user = UserModel.findOne({ where: { ingameName: xeroName } });
+
+  if (!user) {
+    return interaction.reply({
+      content: "User is not registered",
+      ephemeral: true,
+    });
+  }
+
+  await UserModel.update(
+    { points: points, wins: wins, losses: losses },
+    { where: { ingameName: xeroName } }
+  );
+
+  return interaction.reply({
+    content: "Successfully edited player stats!",
     ephemeral: true,
   });
 }
@@ -160,12 +172,118 @@ async function handleCommands(interaction) {
     return;
   }
 
-  interaction.activeGames = activeGames;
-
   try {
     await command.execute(interaction);
   } catch (error) {
     console.error(error);
+  }
+}
+
+async function handleMapBan(interaction) {
+  // Find game which the player is in
+  const member = interaction.member;
+  const game = GameManager.findGameByPlayer(member);
+
+  if (!game) {
+    return interaction.reply({
+      content: "You are not in a game",
+      ephemeral: true,
+    });
+  }
+
+  if (game.state !== "map-ban-a" && game.state !== "map-ban-b") {
+    return interaction.reply({
+      content: "Map banning phase is over",
+      ephemeral: true,
+    });
+  }
+
+  if (
+    interaction.customId === "map-ban-select-a" &&
+    game.state !== "map-ban-a"
+  ) {
+    return interaction.reply({
+      content: "The first map has already been banned",
+      ephemeral: true,
+    });
+  }
+
+  // Check if this player is a captain
+  if (member !== game.captainA && member !== game.captainB) {
+    return interaction.reply({
+      content: "You are not a captain",
+      ephemeral: true,
+    });
+  }
+
+  // Check if it's this player's turn to pick
+  if (game.state === "map-ban-a" && member !== game.captainA) {
+    return interaction.reply({
+      content: "Captain A has to pick first!",
+      ephemeral: true,
+    });
+  }
+
+  if (game.state === "map-ban-b" && member !== game.captainB) {
+    return interaction.reply({
+      content: "It is captain B's turn to pick!",
+      ephemeral: true,
+    });
+  }
+
+  // Ban the picked map from the pool
+  const pickedMap = interaction.values[0];
+
+  if (!game.banMap(pickedMap)) {
+    return interaction.reply({
+      content: "This map was already banned",
+      ephemeral: true,
+    });
+  }
+
+  if (game.state === "map-ban-a") {
+    game.state = "map-ban-b";
+
+    await interaction.reply(`${game.captainA} has banned ${pickedMap}`);
+
+    // Post new menu
+    return interaction.followUp({
+      embeds: [buildMapBanEmbed(game.captainB)],
+      components: [new ActionRowBuilder().addComponents(buildMapBanMenu("b"))],
+    });
+  } else {
+    // 2 maps have been banned.
+    // From the remaining 7 maps, pick one randomly
+    const randomIndex = Math.floor(Math.random() * game.mapPool.length);
+    const chosenMap = game.mapPool[randomIndex];
+
+    game.map = chosenMap;
+
+    await interaction.reply(`${game.captainB} has banned ${pickedMap}`);
+
+    // Print final embed to summarize the game state
+    const summaryEmbed = buildInfoEmbed(
+      "Ready to play",
+      `Matchmaking is over!
+    
+**Team A:**
+${game.teamA.join("\n")}
+
+**Team B:**
+${game.teamB.join("\n")}
+
+**Map:** ${game.map.mapName}
+
+**Once the game is over, use the \`/vote\` command to select the winner.
+
+Use \`/vote A\` to vote for team A and \`/vote B\` to vote for team B.**`,
+      null,
+      game.map.mapImage
+    );
+
+    game.state = "wait-for-result";
+
+    return interaction.followUp({ embeds: [summaryEmbed] });
   }
 }
 
@@ -180,35 +298,59 @@ const client = new Client({
 registerCommands(client);
 
 client.once(Events.ClientReady, async (c) => {
-  Users.sync();
-  Games.sync();
+  await UserModel.sync();
+  await GameModel.sync();
+  await ParticipantModel.sync();
 
   console.log(`Ready! Logged in as ${c.user.tag}`);
   console.log("Synced database 'sophisticated.db'");
 
-  fetchChannels(c);
+  const result = await GameModel.findOne({
+    attributes: [[Sequelize.fn("max", Sequelize.col("id")), "maxId"]],
+  });
 
-  queue = new Queue(channels["queue-v3"], 6);
+  ChannelManager.init(c);
+  GameManager.init(result.get("maxId") + 1);
 
-  await queue.postEmbed();
+  for (const queue of queues) {
+    QueueManager.addQueue(
+      new Queue(
+        queue.name,
+        queue.playerLimit,
+        mapPool,
+        ChannelManager.findByName(queue.channelName)
+      )
+    );
+  }
+
+  await QueueManager.start();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
-    if (interaction.customId === "confirm") {
-      return handleQueueConfirm(interaction);
+    const id = interaction.customId;
+    const queueName = id.substring(id.indexOf("-") + 1);
+    const queue = QueueManager.findQueueByName(queueName);
+
+    if (id.startsWith("join")) {
+      return handleQueueConfirm(interaction, queue);
     }
 
-    if (interaction.customId === "cancel") {
-      return handleQueueCancel(interaction);
+    if (id.startsWith("leave")) {
+      return handleQueueCancel(interaction, queue);
     }
   }
 
   if (interaction.isModalSubmit()) {
-    return interaction.reply({
-      content: "Successfully edited player stats!",
-      ephemeral: true,
-    });
+    if (interaction.customId.startsWith("player-edit-modal")) {
+      return handleEditPlayerModal(interaction);
+    }
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId.startsWith("map-ban-select")) {
+      return handleMapBan(interaction);
+    }
   }
 
   if (interaction.isChatInputCommand()) {

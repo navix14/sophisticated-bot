@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
-const Users = require("../../db/userModel");
 const buildPlayerEditModal = require("../../modals/editPlayerModal");
+const UserModel = require("../../db/userModel");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,16 +14,15 @@ module.exports = {
     )
     .setDefaultMemberPermissions(0),
   async execute(interaction) {
-    const discordUser = interaction.options.getUser("discord_name");
-    const discordName = `${discordUser.username}#${discordUser.discriminator}`;
+    const member = interaction.options.getUser("discord_name");
 
-    const player = await Users.findOne({
-      where: { discord_name: discordName },
+    const player = await UserModel.findOne({
+      where: { discordName: member.tag },
     });
 
-    if (player === null) {
+    if (!player) {
       return interaction.reply({
-        content: `${discordUser} is not registered yet.`,
+        content: `${member} is not registered yet.`,
         ephemeral: true,
       });
     }

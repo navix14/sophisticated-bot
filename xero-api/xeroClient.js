@@ -12,7 +12,15 @@ class XeroClient {
         "#player-profile-header > div > div.pointer-events-none.user-select-none > div:nth-child(1) > div > div"
       ).attr().title;
 
-      const clan = $("#uniteddb-player-view-clan > a").text();
+      const clanEl = $("#uniteddb-player-view-clan > a");
+      let clanNameEncoded = "";
+      let clanNameDecoded = "";
+
+      if (clanEl.length !== 0) {
+        const clanHref = clanEl.attr("href");
+        clanNameEncoded = clanHref.substring("/clan/".length);
+        clanNameDecoded = decodeURIComponent(clanNameEncoded);
+      }
 
       let imageUrl = $(
         "#player-profile-header-heading > div:nth-child(1) > div > span > img"
@@ -22,13 +30,9 @@ class XeroClient {
         imageUrl = "https://xero.gg" + imageUrl;
       }
 
-      return new XeroPlayer(playerName, level, clan, imageUrl);
+      return new XeroPlayer(playerName, level, clanNameDecoded, imageUrl);
     } catch (err) {
-      const body = err.response.data;
-
-      if (body.includes("Player doesn't exist.")) {
-        return null;
-      }
+      console.log(err);
     }
   }
 

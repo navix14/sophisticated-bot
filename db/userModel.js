@@ -7,12 +7,12 @@ const sequelize = new Sequelize("sophisticated", "user", "password", {
   storage: "sophisticated.sqlite",
 });
 
-const Users = sequelize.define("users", {
-  discord_name: {
+const UserModel = sequelize.define("user", {
+  discordName: {
     type: Sequelize.STRING,
     unique: true,
   },
-  ingame_name: {
+  ingameName: {
     type: Sequelize.STRING,
     unique: true,
   },
@@ -29,9 +29,13 @@ const Users = sequelize.define("users", {
     type: Sequelize.INTEGER,
     defaultValue: 0,
   },
-  last_link: {
+  lastLink: {
     type: Sequelize.DATE,
+  },
+  bannedUntil: {
+    type: Sequelize.DATE,
+    defaultValue: new Date(0),
   },
 });
 
-module.exports = Users;
+module.exports = UserModel;

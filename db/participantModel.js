@@ -7,22 +7,17 @@ const sequelize = new Sequelize("sophisticated", "user", "password", {
   storage: "sophisticated.sqlite",
 });
 
-const GameModel = sequelize.define("game", {
-  captainAId: {
+const ParticipantModel = sequelize.define("participant", {
+  gameId: {
     type: Sequelize.INTEGER,
-    allowNull: true,
   },
-  captainBId: {
+  userId: {
     type: Sequelize.INTEGER,
-    allowNull: true,
   },
-  result: {
-    type: Sequelize.STRING,
-  },
-  screenshot_url: {
-    type: Sequelize.STRING,
-    defaultValue: "",
+  team: {
+    type: Sequelize.ENUM("A", "B"),
+    allowNull: false,
   },
 });
 
-module.exports = GameModel;
+module.exports = ParticipantModel;

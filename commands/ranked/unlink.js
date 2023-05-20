@@ -1,6 +1,6 @@
-const Users = require("../../db/userModel");
 const { SlashCommandBuilder } = require("discord.js");
 const { buildInfoEmbed } = require("../../embeds");
+const UserModel = require("../../db/userModel");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -12,12 +12,13 @@ module.exports = {
     .setDefaultMemberPermissions(0),
   async execute(interaction) {
     const account = interaction.options.getUser("name");
-    const discordName = `${account.username}#${account.discriminator}`;
 
     // Check if account exists in database
-    const user = await Users.findOne({ where: { discord_name: discordName } });
+    const user = await UserModel.findOne({
+      where: { discordName: account.tag },
+    });
 
-    if (user === null) {
+    if (!user) {
       return interaction.reply({
         embeds: [
           buildInfoEmbed(
@@ -29,7 +30,7 @@ module.exports = {
     }
 
     // Unlink account
-    await Users.destroy({ where: { discord_name: discordName } });
+    await UserModel.destroy({ where: { discordName: account.tag } });
 
     return interaction.reply({
       embeds: [

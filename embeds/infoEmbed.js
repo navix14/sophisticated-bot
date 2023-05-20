@@ -1,6 +1,10 @@
 const { EmbedBuilder, Colors } = require("discord.js");
 
-function buildInfoEmbed(title, body, imageUrl) {
+function buildInfoEmbed(title, body, thumbnailUrl, imageUrl) {
+  if (!thumbnailUrl) {
+    thumbnailUrl = null;
+  }
+
   if (!imageUrl) {
     imageUrl = null;
   }
@@ -8,7 +12,8 @@ function buildInfoEmbed(title, body, imageUrl) {
   const embed = new EmbedBuilder()
     .setColor(Colors.Blue)
     .setTitle(title)
-    .setThumbnail(imageUrl)
+    .setThumbnail(thumbnailUrl)
+    .setImage(imageUrl)
     .setDescription(body);
 
   return embed;

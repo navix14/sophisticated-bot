@@ -1,14 +1,24 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, ActionRowBuilder } = require("discord.js");
+const { buildMapBanEmbed } = require("../../embeds");
+const { buildMapBanMenu } = require("../../menus");
+const GameManager = require("../../game/GameManager");
 
-function handlePickPhaseEnd(interaction, game) {
-  const unassignedPlayers = game.players.filter(
-    (p) => !Object.hasOwn(p, "team")
-  );
+async function handlePickPhaseEnd(interaction, game) {
+  const unassignedPlayers = game.getTeamlessPlayers();
 
-  game.assignPlayerToTeam(unassignedPlayers[0], "A");
-  game.assignPlayerToTeam(unassignedPlayers[1], "B");
+  let current = "B";
+  while (unassignedPlayers.length > 0) {
+    game.assignPlayerToTeam(unassignedPlayers[0], current);
+    unassignedPlayers.splice(0, 1);
+    current = current === "A" ? "B" : "A";
+  }
 
-  return interaction.reply({ embeds: [game.createEmbed()] });
+  await interaction.reply({ embeds: [game.createEmbed()] });
+
+  return interaction.followUp({
+    embeds: [buildMapBanEmbed(game.captainA)],
+    components: [new ActionRowBuilder().addComponents(buildMapBanMenu("a"))],
+  });
 }
 
 module.exports = {
@@ -19,6 +29,7 @@ module.exports = {
       option.setName("name").setDescription("Discord account").setRequired(true)
     ),
   async execute(interaction) {
+    const member = interaction.member;
     const mentionedUser = interaction.options.getUser("name");
     const mentionedMember = await interaction.guild.members.fetch(
       mentionedUser.id
@@ -31,9 +42,8 @@ module.exports = {
       });
     }
 
-    const game = interaction.activeGames.find((g) =>
-      g.players.includes(interaction.member)
-    );
+    // Which game is this player in?
+    const game = GameManager.findGameByPlayer(member);
 
     if (!game) {
       return interaction.reply({
@@ -49,37 +59,40 @@ module.exports = {
       });
     }
 
-    if (game.state === "pick-a" && interaction.member !== game.captainA) {
+    if (game.state === "pick-a" && member !== game.captainA) {
       return interaction.reply({
         content: "Captain A has to pick first!",
         ephemeral: true,
       });
     }
 
-    if (game.state === "pick-b" && interaction.member !== game.captainB) {
+    if (game.state === "pick-b" && member !== game.captainB) {
       return interaction.reply({
         content: "Captain B has to pick now!",
         ephemeral: true,
       });
     }
 
-    const pickedPlayer = game.players.find((p) => p === mentionedMember);
+    const pickedPlayer = mentionedMember;
 
-    if (!pickedPlayer) {
+    if (!game.players.includes(pickedPlayer)) {
       return interaction.reply({
         content: "This player is not in your game",
         ephemeral: true,
       });
     }
 
-    if (pickedPlayer === interaction.member) {
+    if (pickedPlayer === member) {
       return interaction.reply({
         content: "You cannot pick yourself, dummy!",
         ephemeral: true,
       });
     }
 
-    if (Object.hasOwn(pickedPlayer, "team")) {
+    if (
+      game.teamA.includes(pickedPlayer) ||
+      game.teamB.includes(pickedPlayer)
+    ) {
       return interaction.reply({
         content: `This player is already assigned to team ${pickedPlayer.team}`,
         ephemeral: true,
@@ -89,6 +102,13 @@ module.exports = {
     if (game.state === "pick-a") {
       game.assignPlayerToTeam(pickedPlayer, "A");
       game.state = "pick-b";
+
+      // If there is only one player left, assign them to B directly
+      const teamlessPlayers = game.getTeamlessPlayers();
+      if (teamlessPlayers.length === 1) {
+        game.state = "map-ban-a";
+        return handlePickPhaseEnd(interaction, game);
+      }
 
       return interaction.reply({ embeds: [game.createEmbed()] });
     }
