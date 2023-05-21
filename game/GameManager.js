@@ -3,11 +3,10 @@ const { UserModel, GameModel } = require("../db");
 class GameManager {
   constructor() {
     this.games = [];
-    this.nextGameId = 1;
   }
 
-  init(nextId) {
-    this.nextGameId = nextId;
+  init(gameId) {
+    this.nextGameId = gameId;
   }
 
   addGame(game) {
@@ -81,6 +80,7 @@ class GameManager {
       captainAId: captainAUser.id,
       captainBId: captainBUser.id,
       result: game.result,
+      map: game.map.mapName,
     });
 
     // Save participants

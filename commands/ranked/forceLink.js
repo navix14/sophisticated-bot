@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
 const UserModel = require("../../db/userModel");
+const XeroClient = require("../../xero-api/xeroClient");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -20,8 +21,24 @@ module.exports = {
     .setDefaultMemberPermissions(0),
   async execute(interaction) {
     const discordUser = interaction.options.getUser("discord_name");
+
+    if (!discordUser) {
+      return interaction.reply({
+        content: "User does not exist",
+        ephemeral: true,
+      });
+    }
+
     const xeroName = interaction.options.getString("name");
     const member = await interaction.guild.members.fetch(discordUser.id);
+
+    const xeroClient = new XeroClient();
+    if (!(await xeroClient.playerExists(xeroName))) {
+      return interaction.reply({
+        content: "Xero account does not exist",
+        ephemeral: true,
+      });
+    }
 
     try {
       await UserModel.create({

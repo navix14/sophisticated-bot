@@ -7,7 +7,9 @@ class ChannelManager {
   }
 
   findByName(channelName) {
-    return this.channels.find((channel) => channel.name === channelName);
+    return this.channels.find(
+      (channel) => channel.name.toLowerCase() === channelName.toLowerCase()
+    );
   }
 
   getCategoryChannels() {

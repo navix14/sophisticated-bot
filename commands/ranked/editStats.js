@@ -16,6 +16,13 @@ module.exports = {
   async execute(interaction) {
     const member = interaction.options.getUser("discord_name");
 
+    if (!member) {
+      return interaction.reply({
+        content: "User does not exist",
+        ephemeral: true,
+      });
+    }
+
     const player = await UserModel.findOne({
       where: { discordName: member.tag },
     });

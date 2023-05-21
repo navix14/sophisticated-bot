@@ -7,7 +7,7 @@ function buildResultsEmbed(game, winners, losers, increment) {
     game.map.mapName
   }
     
-    **Winning Team:**
+**Winning Team:**
 ${winners.map((player) => `${player} +${increment} points`).join("\n")}
 
 **Losing Team:**

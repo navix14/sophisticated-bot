@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionsBitField } = require("discord.js");
 const XeroClient = require("../../xero-api/xeroClient");
 const buildInfoEmbed = require("../../embeds/infoEmbed");
 const UserModel = require("../../db/userModel");
@@ -19,6 +19,18 @@ module.exports = {
     const playerName = interaction.options.getString("name");
     const player = await xeroClient.fetchPlayer(playerName);
 
+    if (
+      interaction.channel.name.toLowerCase() !== "info" &&
+      !interaction.member.permissions.has(
+        PermissionsBitField.Flags.Administrator
+      )
+    ) {
+      return interaction.reply({
+        content: "This command can only be issued in the #info channel",
+        ephemeral: true,
+      });
+    }
+
     if (!player) {
       return interaction.reply(`Player ${playerName} does not exist`);
     }
@@ -38,20 +50,23 @@ module.exports = {
         )})`
       : "Player is not in a clan";
 
+    let winRate = 0;
+    if (user.wins + user.losses !== 0) {
+      winRate = Math.round((user.wins / (user.wins + user.losses)) * 100);
+    }
+
     return interaction.reply({
       embeds: [
         buildInfoEmbed(
           "Player Info",
-          `**Player name:** [${
-            player.name
-          }](https://xero.gg/player/${playerName})
+          `**Player name:** [${player.name}](https://xero.gg/player/${playerName})
 **Clan:** ${clan}
 **Level:** ${player.level}
 
 **Points:** ${user.points}
 **Wins:** ${user.wins}
 **Losses:** ${user.losses}
-**W/L ratio:** ${user.losses ? user.wins / user.losses : "0"}
+**Win rate:** ${winRate}%
 `,
           player.imageUrl
         ),

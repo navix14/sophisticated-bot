@@ -19,6 +19,16 @@ const GameModel = sequelize.define("game", {
   result: {
     type: Sequelize.STRING,
   },
+  map: {
+    type: Sequelize.STRING,
+  },
+  incrementPoints: {
+    type: Sequelize.INTEGER,
+  },
+  wasUndone: {
+    type: Sequelize.BOOLEAN,
+    defaultValue: false,
+  },
   screenshot_url: {
     type: Sequelize.STRING,
     defaultValue: "",

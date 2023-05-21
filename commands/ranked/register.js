@@ -2,6 +2,7 @@ const XeroClient = require("../../xero-api/xeroClient");
 const { SlashCommandBuilder } = require("discord.js");
 const { buildErrorEmbed, buildCooldownEmbed } = require("../../embeds");
 const UserModel = require("../../db/userModel");
+const ChannelManager = require("../../channelManager");
 
 const xeroClient = new XeroClient();
 
@@ -32,6 +33,15 @@ module.exports = {
   async execute(interaction) {
     const xeroName = interaction.options.getString("name");
     const discordName = interaction.user.tag;
+
+    const registerChannel = ChannelManager.findByName("register");
+
+    if (interaction.channel.name.toLowerCase() !== "register") {
+      return interaction.reply({
+        content: `You can only register in the ${registerChannel} channel`,
+        ephemeral: true,
+      });
+    }
 
     // Check if Xero account exists
     if (!(await xeroClient.playerExists(xeroName))) {

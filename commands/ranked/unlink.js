@@ -13,6 +13,13 @@ module.exports = {
   async execute(interaction) {
     const account = interaction.options.getUser("name");
 
+    if (!account) {
+      return interaction.reply({
+        content: "User does not exist",
+        ephemeral: true,
+      });
+    }
+
     // Check if account exists in database
     const user = await UserModel.findOne({
       where: { discordName: account.tag },

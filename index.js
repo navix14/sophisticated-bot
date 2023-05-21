@@ -4,12 +4,19 @@ const {
   GatewayIntentBits,
   ChannelType,
   ActionRowBuilder,
+  PermissionsBitField,
 } = require("discord.js");
-const { token, mapPool, gameCategory, queues } = require("./config.json");
+const {
+  token,
+  mapPool,
+  gameCategory,
+  queues,
+  guildId,
+} = require("./config.json");
 const { registerCommands } = require("./registerCommands");
 const { UserModel, GameModel, ParticipantModel } = require("./db");
 const { extractString } = require("./utils");
-const { buildInfoEmbed, buildMapBanEmbed } = require("./embeds");
+const { buildMapBanEmbed, buildGameSummaryEmbed } = require("./embeds");
 const { buildMapBanMenu } = require("./menus");
 const { Queue, RankedGame, QueueManager, GameManager } = require("./game");
 const ChannelManager = require("./channelManager");
@@ -21,10 +28,22 @@ const xeroClient = new XeroClient();
 async function createGame(interaction, players) {
   const gameId = GameManager.nextGameId;
 
+  const allowPerms = players.map((p) => ({
+    id: p.user.id,
+    allow: [PermissionsBitField.Flags.SendMessages],
+  }));
+
   const gameChannel = await interaction.guild.channels.create({
     name: `game-${gameId}`,
     type: ChannelType.GuildText,
     parent: ChannelManager.findByName(gameCategory),
+    permissionOverwrites: [
+      {
+        id: interaction.guild.id,
+        deny: [PermissionsBitField.Flags.SendMessages],
+      },
+      ...allowPerms,
+    ],
   });
 
   const game = new RankedGame({
@@ -53,7 +72,7 @@ Captain B: **${game.captainB}**`);
   await gameChannel.send({ embeds: [game.createEmbed()] });
 }
 
-async function handleQueueConfirm(interaction, queue) {
+async function handleQueueJoin(interaction, queue) {
   const member = interaction.member;
 
   // Check if member is already in any queue
@@ -121,7 +140,7 @@ async function handleQueueConfirm(interaction, queue) {
   }
 }
 
-async function handleQueueCancel(interaction, queue) {
+async function handleQueueLeave(interaction, queue) {
   if (!queue.contains(interaction.member)) {
     return interaction.reply({
       content: "You're not in the queue.",
@@ -144,7 +163,7 @@ async function handleEditPlayerModal(interaction) {
   const wins = parseInt(interaction.fields.getTextInputValue("winsInput"));
   const losses = parseInt(interaction.fields.getTextInputValue("lossesInput"));
 
-  const user = UserModel.findOne({ where: { ingameName: xeroName } });
+  const user = await UserModel.findOne({ where: { ingameName: xeroName } });
 
   if (!user) {
     return interaction.reply({
@@ -157,6 +176,16 @@ async function handleEditPlayerModal(interaction) {
     { points: points, wins: wins, losses: losses },
     { where: { ingameName: xeroName } }
   );
+
+  const member = interaction.guild.members.cache.find(
+    (m) => m.user.tag === user.discordName
+  );
+
+  try {
+    await member.setNickname(`${xeroName} [${points}]`);
+  } catch (err) {
+    console.log(err);
+  }
 
   return interaction.reply({
     content: "Successfully edited player stats!",
@@ -258,34 +287,64 @@ async function handleMapBan(interaction) {
     const chosenMap = game.mapPool[randomIndex];
 
     game.map = chosenMap;
+    game.state = "wait-for-result";
 
     await interaction.reply(`${game.captainB} has banned ${pickedMap}`);
 
     // Print final embed to summarize the game state
-    const summaryEmbed = buildInfoEmbed(
-      "Ready to play",
-      `Matchmaking is over!
-    
-**Team A:**
-${game.teamA.join("\n")}
-
-**Team B:**
-${game.teamB.join("\n")}
-
-**Map:** ${game.map.mapName}
-
-**Once the game is over, use the \`/vote\` command to select the winner.
-
-Use \`/vote A\` to vote for team A and \`/vote B\` to vote for team B.**`,
-      null,
-      game.map.mapImage
-    );
-
-    game.state = "wait-for-result";
-
-    return interaction.followUp({ embeds: [summaryEmbed] });
+    return interaction.followUp({ embeds: [buildGameSummaryEmbed(game)] });
   }
 }
+
+function leaveOtherGuilds(client) {
+  const guilds = client.guilds.cache;
+
+  guilds.forEach((guild) => {
+    if (guild.id !== guildId) {
+      guild.leave();
+      console.log(`Left guild ${guild.name}`);
+    }
+  });
+}
+
+async function getNextGameId() {
+  const result = await GameModel.findOne({
+    attributes: [[Sequelize.fn("max", Sequelize.col("id")), "maxId"]],
+  });
+
+  return result.get("maxId") + 1;
+}
+
+/* async function setupTournament() {
+  const tournamentChannel = ChannelManager.findByName("tournament-info");
+  const tournamentWishesChannel =
+    ChannelManager.findByName("tournament-wishes");
+
+  const embed = buildInfoEmbed(
+    "Tournament",
+    `**We are hosting a V2 tournament!**
+
+**The rules are simple:**
+- Register until 09.06.2023 with your teammate. You can also specify a substitute teammate for the case your premate isn't available.
+- Only 2 vs. 2 is allowed.
+- Match has to be 30 minutes / 10 touchdowns.
+- Macros & tools - except for ingame IWJ - aren't allowed.
+
+**Prize:**
+- 1st place: 40€ + "Tournament King" role
+- 2nd place: 20€
+- 3rd place: 10€
+
+**Wishes:**
+Use the ${tournamentWishesChannel} channel to post your suggestions for the current and future tournaments. (Rule changes, map wishes, etc.)`
+  );
+
+  if (tournamentChannel) {
+    await tournamentChannel.send({
+      embeds: [embed],
+    });
+  }
+} */
 
 const client = new Client({
   intents: [
@@ -302,15 +361,18 @@ client.once(Events.ClientReady, async (c) => {
   await GameModel.sync();
   await ParticipantModel.sync();
 
+  const nextGameId = await getNextGameId();
+
   console.log(`Ready! Logged in as ${c.user.tag}`);
   console.log("Synced database 'sophisticated.db'");
 
-  const result = await GameModel.findOne({
-    attributes: [[Sequelize.fn("max", Sequelize.col("id")), "maxId"]],
-  });
+  leaveOtherGuilds(c);
 
   ChannelManager.init(c);
-  GameManager.init(result.get("maxId") + 1);
+  GameManager.init(nextGameId);
+
+  // Post tournament embed
+  // await setupTournament();
 
   for (const queue of queues) {
     QueueManager.addQueue(
@@ -333,11 +395,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const queue = QueueManager.findQueueByName(queueName);
 
     if (id.startsWith("join")) {
-      return handleQueueConfirm(interaction, queue);
+      return handleQueueJoin(interaction, queue);
     }
 
     if (id.startsWith("leave")) {
-      return handleQueueCancel(interaction, queue);
+      return handleQueueLeave(interaction, queue);
     }
   }
 

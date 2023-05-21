@@ -31,6 +31,14 @@ module.exports = {
   async execute(interaction) {
     const member = interaction.member;
     const mentionedUser = interaction.options.getUser("name");
+
+    if (!mentionedUser) {
+      return interaction.reply({
+        content: "This user does not exist",
+        ephemeral: true,
+      });
+    }
+
     const mentionedMember = await interaction.guild.members.fetch(
       mentionedUser.id
     );
