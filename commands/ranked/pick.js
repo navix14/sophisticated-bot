@@ -119,9 +119,7 @@ module.exports = {
       }
 
       return interaction.reply({ embeds: [game.createEmbed()] });
-    }
-
-    if (game.state == "pick-b") {
+    } else {
       game.assignPlayerToTeam(pickedPlayer, "B");
       game.state = "map-ban-a";
 

@@ -19,9 +19,9 @@ const { extractString } = require("./utils");
 const { buildMapBanEmbed, buildGameSummaryEmbed } = require("./embeds");
 const { buildMapBanMenu } = require("./menus");
 const { Queue, RankedGame, QueueManager, GameManager } = require("./game");
+const { Sequelize } = require("sequelize");
 const ChannelManager = require("./channelManager");
 const XeroClient = require("./xero-api/xeroClient");
-const { Sequelize } = require("sequelize");
 
 const xeroClient = new XeroClient();
 
@@ -61,9 +61,7 @@ async function createGame(interaction, players) {
 
   GameManager.addGame(game);
 
-  const mentionString = playersShuffled.join(" ");
-
-  await gameChannel.send(`${mentionString}
+  await gameChannel.send(`${playersShuffled.join(" ")}
 Captains have been chosen!
 
 Captain A: **${game.captainA}**
