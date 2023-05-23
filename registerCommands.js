@@ -28,6 +28,10 @@ function registerCommands(client) {
       }
     }
   }
+
+  // Register manual commands
+  const pickCommand = require("./commands/ranked/pick");
+  client.commands.set("p", pickCommand);
 }
 
 module.exports = {

@@ -151,7 +151,7 @@ module.exports = {
 
       setTimeout(() => {
         interaction.channel.delete();
-      }, 1000 * 60);
+      }, 5000);
     } else if (game.votesB > game.players.length / 2) {
       interaction.channel.send(
         `Congratulations ${game.teamB.join(" ")}! Team B has won the game.`
@@ -165,7 +165,7 @@ module.exports = {
 
       setTimeout(() => {
         interaction.channel.delete();
-      }, 1000 * 60);
+      }, 5000);
     }
   },
 };

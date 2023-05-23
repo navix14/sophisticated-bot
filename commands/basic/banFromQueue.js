@@ -45,11 +45,11 @@ module.exports = {
     const bansChannel = ChannelManager.findByName("bans");
 
     bansChannel.send(
-      `${user} has been banned until ${futureDate.toLocaleString()}`
+      `${user} has been banned until ${futureDate.toLocaleString("de-DE")}`
     );
 
     return interaction.reply({
-      content: `Banned ${user} from ranked queues until ${futureDate.toLocaleString()}`,
+      content: `Banned ${user} from ranked queues until ${futureDate.toLocaleString("de-DE")}`,
       ephemeral: true,
     });
   },

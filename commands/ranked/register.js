@@ -1,10 +1,7 @@
-const XeroClient = require("../../xero-api/xeroClient");
 const { SlashCommandBuilder } = require("discord.js");
 const { buildErrorEmbed, buildCooldownEmbed } = require("../../embeds");
 const UserModel = require("../../db/userModel");
 const ChannelManager = require("../../channelManager");
-
-const xeroClient = new XeroClient();
 
 async function renameUser(interaction, xeroName) {
   try {
@@ -44,7 +41,7 @@ module.exports = {
     }
 
     // Check if Xero account exists
-    if (!(await xeroClient.playerExists(xeroName))) {
+    /* if (!(await xeroClient.playerExists(xeroName))) {
       return interaction.reply({
         embeds: [
           buildErrorEmbed(
@@ -53,7 +50,7 @@ module.exports = {
           ),
         ],
       });
-    }
+    } */
 
     const existingUser = await UserModel.findOne({
       where: { ingameName: xeroName },

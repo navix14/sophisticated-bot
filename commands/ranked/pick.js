@@ -6,11 +6,8 @@ const GameManager = require("../../game/GameManager");
 async function handlePickPhaseEnd(interaction, game) {
   const unassignedPlayers = game.getTeamlessPlayers();
 
-  let current = "B";
-  while (unassignedPlayers.length > 0) {
-    game.assignPlayerToTeam(unassignedPlayers[0], current);
-    unassignedPlayers.splice(0, 1);
-    current = current === "A" ? "B" : "A";
+  if (game.teamB.length > game.teamA.length && unassignedPlayers.length > 0) {
+    game.assignPlayerToTeam(unassignedPlayers[0], "A");
   }
 
   await interaction.reply({ embeds: [game.createEmbed()] });
@@ -60,7 +57,11 @@ module.exports = {
       });
     }
 
-    if (game.state !== "pick-a" && game.state !== "pick-b") {
+    if (
+      game.state !== "pick-a" &&
+      game.state !== "pick-b" &&
+      game.state !== "pick-b2"
+    ) {
       return interaction.reply({
         content: "Picking phase is over!",
         ephemeral: true,
@@ -75,6 +76,13 @@ module.exports = {
     }
 
     if (game.state === "pick-b" && member !== game.captainB) {
+      return interaction.reply({
+        content: "Captain B has to pick now!",
+        ephemeral: true,
+      });
+    }
+
+    if (game.state === "pick-b2" && member !== game.captainB) {
       return interaction.reply({
         content: "Captain B has to pick now!",
         ephemeral: true,
@@ -114,15 +122,20 @@ module.exports = {
       // If there is only one player left, assign them to B directly
       const teamlessPlayers = game.getTeamlessPlayers();
       if (teamlessPlayers.length === 1) {
+        game.assignPlayerToTeam(teamlessPlayers[0], "B");
         game.state = "map-ban-a";
         return handlePickPhaseEnd(interaction, game);
       }
 
       return interaction.reply({ embeds: [game.createEmbed()] });
-    } else {
+    } else if (game.state === "pick-b") {
       game.assignPlayerToTeam(pickedPlayer, "B");
+      game.state = "pick-b2";
+      return interaction.reply({ emebds: [game.createEmbed()] });
+    } else if (game.state === "pick-b2") {
+      game.assignPlayerToTeam(pickedPlayer, "B");
+      interaction.channel.send({ embeds: [game.createEmbed()] });
       game.state = "map-ban-a";
-
       return handlePickPhaseEnd(interaction, game);
     }
   },

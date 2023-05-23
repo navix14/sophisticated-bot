@@ -61,7 +61,9 @@ module.exports = {
     const bansChannel = ChannelManager.findByName("bans");
 
     await bansChannel.send(
-      `${interaction.member} has been banned until ${future.toLocaleString()}`
+      `${interaction.member} has been banned until ${future.toLocaleString(
+        "de-DE"
+      )}`
     );
 
     setTimeout(() => {

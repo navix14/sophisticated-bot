@@ -21,9 +21,6 @@ const { buildMapBanMenu } = require("./menus");
 const { Queue, RankedGame, QueueManager, GameManager } = require("./game");
 const { Sequelize } = require("sequelize");
 const ChannelManager = require("./channelManager");
-const XeroClient = require("./xero-api/xeroClient");
-
-const xeroClient = new XeroClient();
 
 async function createGame(interaction, players) {
   const gameId = GameManager.nextGameId;
@@ -98,12 +95,14 @@ async function handleQueueJoin(interaction, queue) {
 
   if (user.bannedUntil && new Date() < user.bannedUntil) {
     return interaction.reply({
-      content: `You are banned from matchmaking until ${user.bannedUntil.toLocaleString()}`,
+      content: `You are banned from matchmaking until ${user.bannedUntil.toLocaleString(
+        "de-DE"
+      )}`,
       ephemeral: true,
     });
   }
 
-  const player = await xeroClient.fetchPlayer(user.ingameName);
+  /* const player = await xeroClient.fetchPlayer(user.ingameName);
 
   // Check if player is at least semi level
   if (player.level < 21) {
@@ -111,7 +110,7 @@ async function handleQueueJoin(interaction, queue) {
       content: `You have to be at least <:semipro:1107784693421711491> (Semi-Pro) to play ranked. Either wait until you level up or link to another account. To un-link in this case, ask an Admin.`,
       ephemeral: true,
     });
-  }
+  } */
 
   // Check if player is already in a game
   if (GameManager.isPlayerInGame(member)) {
@@ -189,21 +188,6 @@ async function handleEditPlayerModal(interaction) {
     content: "Successfully edited player stats!",
     ephemeral: true,
   });
-}
-
-async function handleCommands(interaction) {
-  const command = interaction.client.commands.get(interaction.commandName);
-
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
-    return;
-  }
-
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-  }
 }
 
 async function handleMapBan(interaction) {
@@ -344,11 +328,27 @@ Use the ${tournamentWishesChannel} channel to post your suggestions for the curr
   }
 } */
 
+async function handleCommands(interaction) {
+  const command = interaction.client.commands.get(interaction.commandName);
+
+  if (!command) {
+    console.error(`No command matching ${interaction.commandName} was found.`);
+    return;
+  }
+
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -386,6 +386,148 @@ client.once(Events.ClientReady, async (c) => {
   await QueueManager.start();
 });
 
+async function handlePickPhaseEnd(channel, game) {
+  const unassignedPlayers = game.getTeamlessPlayers();
+
+  if (game.teamB.length > game.teamA.length && unassignedPlayers.length > 0) {
+    game.assignPlayerToTeam(unassignedPlayers[0], "A");
+  }
+
+  await channel.send({ embeds: [game.createEmbed()] });
+
+  return channel.send({
+    embeds: [buildMapBanEmbed(game.captainA)],
+    components: [new ActionRowBuilder().addComponents(buildMapBanMenu("a"))],
+  });
+}
+
+function handlePick(message) {
+  const authorMember = message.member;
+  const game = GameManager.findGameByPlayer(authorMember);
+
+  console.log("entered handlePick function");
+
+  if (!game) {
+    message.delete();
+    console.log("game does not exist");
+    return;
+  }
+
+  if (game.state !== "pick-a" && game.state !== "pick-b") {
+    message.delete();
+    console.log("picking is over");
+    return;
+  }
+
+  if (!message.channel.name.startsWith("game-")) {
+    message.delete();
+    console.log("you are not in a game channel");
+    return;
+  }
+
+  if (authorMember !== game.captainA && authorMember !== game.captainB) {
+    message.delete();
+    console.log("you are not a captain");
+    return;
+  }
+
+  if (game.state === "pick-a") {
+    if (authorMember !== game.captainA) {
+      message.delete();
+      console.log("captain a needs to pick");
+      return;
+    }
+
+    // Captain A can pick one player
+    const mentionedMembers = message.mentions.members;
+
+    if (mentionedMembers.size !== 1) {
+      message.delete();
+      console.log("captain a has to pick 1 member");
+      return;
+    }
+
+    const pickedMember = mentionedMembers.at(0);
+
+    if (!game.contains(pickedMember) || pickedMember === authorMember) {
+      message.delete();
+      console.log("game does not contain the picked member");
+      return;
+    }
+
+    if (game.playerHasTeam(pickedMember)) {
+      message.delete();
+      console.log("picked player is already in a team");
+      return;
+    }
+
+    // Assign picked member to team A
+    game.assignPlayerToTeam(pickedMember, "A");
+    game.state = "pick-b";
+
+    const teamlessPlayers = game.getTeamlessPlayers();
+    if (teamlessPlayers.length === 1) {
+      game.assignPlayerToTeam(teamlessPlayers[0], "B");
+      game.state = "map-ban-a";
+      return handlePickPhaseEnd(message.channel, game);
+    }
+
+    message.channel.send({ embeds: [game.createEmbed()] });
+  } else if (game.state === "pick-b") {
+    if (authorMember !== game.captainB) {
+      message.delete();
+      console.log("captain b has to pick now");
+      return;
+    }
+
+    const mentionedMembers = message.mentions.members;
+
+    if (mentionedMembers.size !== 2) {
+      message.delete();
+      console.log("captain B has to pick 2 players");
+      return;
+    }
+
+    if (
+      !game.contains(mentionedMembers.at(0)) ||
+      !game.contains(mentionedMembers.at(1)) ||
+      mentionedMembers.at(0) === authorMember ||
+      mentionedMembers.at(0) === authorMember
+    ) {
+      message.delete();
+      console.log("game does not contain mentioned members");
+      return;
+    }
+
+    if (
+      game.playerHasTeam(mentionedMembers.at(0)) ||
+      game.playerHasTeam(mentionedMembers.at(1))
+    ) {
+      message.delete();
+      console.log("members are already in teams");
+      return;
+    }
+
+    game.assignPlayerToTeam(mentionedMembers.at(0), "B");
+    game.assignPlayerToTeam(mentionedMembers.at(1), "B");
+    game.state = "map-ban-a";
+
+    // message.channel.send({ embeds: [game.createEmbed()] });
+    handlePickPhaseEnd(message.channel, game);
+  }
+}
+
+client.on(Events.MessageCreate, async (message) => {
+  if (message.content.includes("=p")) {
+    handlePick(message);
+  }
+
+  message.mentions.members[0];
+
+  console.log(`${message.author.tag}: ${message.content}`);
+  console.log(`  Mentions: ${message.mentions.users.map((u) => u.tag)}`);
+});
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     const id = interaction.customId;
@@ -416,6 +558,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isChatInputCommand()) {
     handleCommands(interaction);
   }
+
+  // Handle picking
 });
 
 client.login(token);

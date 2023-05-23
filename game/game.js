@@ -4,7 +4,12 @@ const { buildInfoEmbed } = require("../embeds");
 function buildPickEmbed(game) {
   const teamAPlayers = game.teamA.filter((p) => p !== game.captainA).join("\n");
   const teamBPlayers = game.teamB.filter((p) => p !== game.captainB).join("\n");
+
   const currentPick = game.state === "pick-a" ? game.captainA : game.captainB;
+  const explanation =
+    game.state === "pick-a"
+      ? `${currentPick} Use the \`=p\` command to pick 1 player!`
+      : `${currentPick} Use the \`=p\` command to pick 2 players!`;
 
   return buildInfoEmbed(
     `Game ${game.gameId} (V${game.players.length / 2} Queue)`,
@@ -24,7 +29,7 @@ ${game.getTeamlessPlayers().join("\n")}
 **Current pick:**
 ${currentPick}
 
-${currentPick} Use the \`/pick\` command to pick 1 player!
+${explanation}
 `
   );
 }
@@ -34,16 +39,14 @@ function buildFinalTeamsEmbed(game) {
   const teamBPlayers = game.teamB.filter((p) => p !== game.captainB).join("\n");
 
   return buildInfoEmbed(
-    `Game ${this.gameId} final teams!`,
-    `
-**Team 1:**
-Captain: ${this.captainA}
+    `Game ${game.gameId} final teams!`,
+    `**Team 1:**
+Captain: ${game.captainA}
 ${teamAPlayers}
 
 **Team 2:**
-Captain: ${this.captainB}
-${teamBPlayers}
-`
+Captain: ${game.captainB}
+${teamBPlayers}`
   );
 }
 
@@ -102,6 +105,14 @@ class RankedGame {
     this.hasVoted.push(player);
   }
 
+  contains(player) {
+    return this.players.includes(player);
+  }
+
+  playerHasTeam(player) {
+    return this.teamA.includes(player) || this.teamB.includes(player);
+  }
+
   setCaptainA(player) {
     this.teamA.push(player);
     this.captainA = player;
@@ -124,6 +135,7 @@ class RankedGame {
     switch (this.state) {
       case "pick-a":
       case "pick-b":
+      case "pick-b2":
         return buildPickEmbed(this);
       case "map-ban-a":
         return buildFinalTeamsEmbed(this);
